@@ -53,9 +53,13 @@ scan_library() {
         exit 1
     fi
 
-    # Generate a CSV filename with a timestamp.
+    # Create scan data directory structure
+    scan_data_dir="${library_dir}/.flac_scan_data"
+    mkdir -p "${scan_data_dir}/reports" "${scan_data_dir}/metadata" "${scan_data_dir}/logs"
+    
+    # Generate CSV filename with timestamp
     timestamp=$(date +%F_%H-%M-%S)
-    csv_output="${library_dir}/flac_scan_${timestamp}.csv"
+    csv_output="${scan_data_dir}/reports/flac_scan_${timestamp}.csv"
 
     echo "Scanning FLAC files in: $library_dir"
     error_count=0
@@ -133,8 +137,12 @@ reencode_library() {
         exit 1
     fi
 
+    # Create scan data directory if needed
+    scan_data_dir="${library_dir}/.flac_scan_data"
+    mkdir -p "${scan_data_dir}/logs"
+    
     # Generate a log file for the reencoding process.
-    log_file="${library_dir}/reencode_log_$(date +%F_%H-%M-%S).txt"
+    log_file="${scan_data_dir}/logs/reencode_log_$(date +%F_%H-%M-%S).txt"
     echo "Reencoding started at $(date)" > "$log_file"
 
     total_files=0
@@ -235,7 +243,9 @@ scan_incremental() {
     fi
 
     # Check for existing metadata file
-    local metadata_file="${library_dir}/.flac_scan_metadata"
+    local scan_data_dir="${library_dir}/.flac_scan_data"
+    mkdir -p "${scan_data_dir}/metadata"
+    local metadata_file="${scan_data_dir}/metadata/scan_history.json"
     local last_scan="1970-01-01T00:00:00Z"  # Default to epoch if no metadata
     
     if [ -f "$metadata_file" ]; then
@@ -245,9 +255,13 @@ scan_incremental() {
         echo "No previous scan found - will scan all files"
     fi
 
+    # Create scan data directory structure
+    local scan_data_dir="${library_dir}/.flac_scan_data"
+    mkdir -p "${scan_data_dir}/reports" "${scan_data_dir}/metadata" "${scan_data_dir}/logs"
+    
     # Generate CSV filename with timestamp
     local timestamp=$(date +%F_%H-%M-%S)
-    local csv_output="${library_dir}/flac_scan_${timestamp}.csv"
+    local csv_output="${scan_data_dir}/reports/flac_scan_${timestamp}.csv"
 
     echo "Scanning new/changed FLAC files in: $library_dir"
     local error_count=0
