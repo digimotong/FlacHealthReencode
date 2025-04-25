@@ -38,11 +38,13 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-# Ensure the 'flac' command is available.
-if ! command -v flac &>/dev/null; then
-    echo "Error: The 'flac' command is not installed. Please install it (e.g., sudo apt-get install flac) and try again."
-    exit 1
-fi
+# Ensure required commands are available.
+for cmd in flac jq; do
+    if ! command -v "$cmd" &>/dev/null; then
+        echo "Error: The '$cmd' command is not installed. Please install it (e.g., sudo apt-get install $cmd) and try again."
+        exit 1
+    fi
+done
 
 ########################################
 # FUNCTION: scan_library
@@ -83,6 +85,14 @@ scan_library() {
 
     echo "Scan complete. Total FLAC files scanned: $total_count. Errors found: $error_count."
     echo "CSV report generated: $csv_output"
+
+    # Update metadata file
+    local metadata_file="${library_dir}/.flac_scan_metadata"
+    jq -n \
+        --arg full "$(date -u +%FT%TZ)" \
+        --arg incremental "$(date -u +%FT%TZ)" \
+        '{last_full_scan: $full, last_incremental_scan: $incremental, scan_version: "1.0"}' > "$metadata_file"
+    echo "Scan metadata updated: $metadata_file"
 }
 
 ########################################
@@ -192,18 +202,78 @@ main_menu() {
     echo "======================================"
     echo " FLAC Health Check & Reencode Script"
     echo "======================================"
-    echo "1) Scan music library"
+    echo "1) Full scan music library"
     echo "2) Reencode problematic FLAC files (with local backups)"
-    echo "3) Quit"
+    echo "3) Scan new/changed files only"
+    echo "4) Quit"
     echo "======================================"
     read -rp "Enter your selection (1, 2, or 3): " selection
 
     case "$selection" in
         1) scan_library ;;
         2) reencode_library ;;
-        3) echo "Exiting..."; exit 0 ;;
+        3) scan_incremental ;;
+        4) echo "Exiting..."; exit 0 ;;
         *) echo "Invalid selection. Exiting." ; exit 1 ;;
     esac
+}
+
+########################################
+# FUNCTION: scan_incremental
+# Scans only FLAC files that have been modified since the last scan,
+# or files that have never been scanned before.
+########################################
+scan_incremental() {
+    read -rp "Enter the full path to your music library directory: " library_dir
+
+    # Validate the directory
+    if [ ! -d "$library_dir" ]; then
+        echo "Error: The directory '$library_dir' does not exist."
+        exit 1
+    fi
+
+    # Check for existing metadata file
+    local metadata_file="${library_dir}/.flac_scan_metadata"
+    local last_scan="1970-01-01T00:00:00Z"  # Default to epoch if no metadata
+    
+    if [ -f "$metadata_file" ]; then
+        last_scan=$(jq -r '.last_full_scan // "1970-01-01T00:00:00Z"' "$metadata_file")
+        echo "Found previous scan from: $last_scan"
+    else
+        echo "No previous scan found - will scan all files"
+    fi
+
+    # Generate CSV filename with timestamp
+    local timestamp=$(date +%F_%H-%M-%S)
+    local csv_output="${library_dir}/flac_scan_${timestamp}.csv"
+    echo "filepath" > "$csv_output"
+
+    echo "Scanning new/changed FLAC files in: $library_dir"
+    local error_count=0
+    local total_count=0
+    local scanned_count=0
+
+    # Find and scan files modified since last scan
+    while IFS= read -r -d '' flac_file; do
+        total_count=$((total_count + 1))
+        if ! flac -t "$flac_file" &>/dev/null; then
+            echo "\"${flac_file}\"" >> "$csv_output"
+            error_count=$((error_count + 1))
+            echo "Error detected in: $flac_file"
+        fi
+        scanned_count=$((scanned_count + 1))
+    done < <(find "$library_dir" -type f -iname "*.flac" -newermt "$last_scan" -print0)
+
+    # Update metadata file
+    jq -n \
+        --arg full "$(date -u +%FT%TZ)" \
+        --arg incremental "$(date -u +%FT%TZ)" \
+        '{last_full_scan: $full, last_incremental_scan: $incremental, scan_version: "1.0"}' > "$metadata_file"
+
+    echo "Incremental scan complete."
+    echo "Files scanned: $scanned_count (out of $total_count total FLAC files)"
+    echo "Errors found: $error_count"
+    echo "CSV report generated: $csv_output"
 }
 
 # Start the script by displaying the main menu.
