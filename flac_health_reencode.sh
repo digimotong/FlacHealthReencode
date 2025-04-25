@@ -1,5 +1,14 @@
 #!/bin/bash
 # flac_health_reencode.sh
+
+# Terminal colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Progress tracking
+PROGRESS_WIDTH=50
 # -------------------------------------------
 # This script provides three main functions:
 #  1) Full library scan for FLAC encoding errors
@@ -40,6 +49,37 @@ for cmd in flac jq; do
 done
 
 ########################################
+# FUNCTION: count_flac_files
+# Counts all FLAC files in a directory
+########################################
+count_flac_files() {
+    local dir="$1"
+    find "$dir" -type f -iname "*.flac" | wc -l
+}
+
+########################################
+# FUNCTION: show_progress
+# Displays a progress bar
+# Arguments:
+#   $1 - Current count
+#   $2 - Total count
+#   $3 - Error count
+########################################
+show_progress() {
+    local current=$1
+    local total=$2
+    local errors=$3
+    local percent=$((current * 100 / total))
+    local filled=$((percent * PROGRESS_WIDTH / 100))
+    local empty=$((PROGRESS_WIDTH - filled))
+    
+    printf "\r["
+    printf "%${filled}s" | tr ' ' '█'
+    printf "%${empty}s" | tr ' ' '░'
+    printf "] %3d%% (%d/%d) | Errors: %d" "$percent" "$current" "$total" "$errors"
+}
+
+########################################
 # FUNCTION: scan_library
 # Prompts for a music library directory, then recursively scans all FLAC files using 'flac -t'.
 # Any file that fails the test is recorded (with quotes) in a CSV file stored in the library directory.
@@ -62,33 +102,57 @@ scan_library() {
     csv_output="${scan_data_dir}/reports/flac_scan_${timestamp}.csv"
 
     echo "Scanning FLAC files in: $library_dir"
+    echo "Counting FLAC files..."
+    total_files=$(count_flac_files "$library_dir")
+    echo "Found $total_files FLAC files to scan"
+    
     error_count=0
-    total_count=0
+    processed_count=0
+    start_time=$(date +%s)
+    last_update=0
 
     # Recursively find .flac files (using -print0 to handle spaces).
     while IFS= read -r -d '' flac_file; do
-        total_count=$((total_count + 1))
-        # Test the FLAC file.
+        processed_count=$((processed_count + 1))
+        # Update progress every 50 files or 1% progress
+        if (( processed_count % 50 == 0 || processed_count * 100 / total_files > last_update )); then
+            show_progress "$processed_count" "$total_files" "$error_count"
+            last_update=$((processed_count * 100 / total_files))
+        fi
+
+        # Test the FLAC file
         if ! flac -t "$flac_file" &>/dev/null; then
             # Create CSV file if first error
             if [ $error_count -eq 0 ]; then
-                echo "# Scan Metadata: $(date -u +%FT%TZ) | Files: $total_count | Errors: | Type: full" > "$csv_output"
+                echo "# Scan Metadata: $(date -u +%FT%TZ) | Files: $total_files | Errors: | Type: full" > "$csv_output"
                 echo "filepath" >> "$csv_output"
             fi
             # Log problematic file
             echo "\"${flac_file}\"" >> "$csv_output"
             error_count=$((error_count + 1))
-            echo "Error detected in: $flac_file"
+            printf "\n${RED}Error detected in:${NC} $flac_file\n"
+            show_progress "$processed_count" "$total_files" "$error_count"
         fi
     done < <(find "$library_dir" -type f -iname "*.flac" -print0)
 
+    # Clear progress line
+    printf "\r%${COLUMNS}s\r" ""
+    
     # Update error count in metadata if CSV was created
     if [ $error_count -gt 0 ]; then
         sed -i "s/| Errors: /| Errors: $error_count/" "$csv_output"
-        echo "Scan complete. Found $error_count errors in $total_count files."
-        echo "CSV report generated: $csv_output"
+        end_time=$(date +%s)
+        duration=$((end_time - start_time))
+        printf "${GREEN}Scan complete.${NC}\n"
+        printf "Scanned ${YELLOW}%d${NC} files in ${YELLOW}%d${NC} seconds\n" "$processed_count" "$duration"
+        printf "Found ${RED}%d${NC} errors\n" "$error_count"
+        printf "CSV report generated: ${YELLOW}%s${NC}\n" "$csv_output"
     else
-        echo "Scan complete. No errors found in $total_count files."
+        end_time=$(date +%s)
+        duration=$((end_time - start_time))
+        printf "${GREEN}Scan complete.${NC}\n"
+        printf "Scanned ${YELLOW}%d${NC} files in ${YELLOW}%d${NC} seconds\n" "$processed_count" "$duration"
+        printf "${GREEN}No errors found.${NC}\n"
         rm -f "$csv_output"  # Remove empty CSV
     fi
 
