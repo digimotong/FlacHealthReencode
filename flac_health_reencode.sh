@@ -64,9 +64,6 @@ scan_library() {
     timestamp=$(date +%F_%H-%M-%S)
     csv_output="${library_dir}/flac_scan_${timestamp}.csv"
 
-    # Write CSV header.
-    echo "filepath" > "$csv_output"
-
     echo "Scanning FLAC files in: $library_dir"
     error_count=0
     total_count=0
@@ -76,15 +73,27 @@ scan_library() {
         total_count=$((total_count + 1))
         # Test the FLAC file.
         if ! flac -t "$flac_file" &>/dev/null; then
-            # Log problematic file (enclosing the path in quotes for CSV safety).
+            # Create CSV file if first error
+            if [ $error_count -eq 0 ]; then
+                echo "# Scan Metadata: $(date -u +%FT%TZ) | Files: $total_count | Errors: | Type: full" > "$csv_output"
+                echo "filepath" >> "$csv_output"
+            fi
+            # Log problematic file
             echo "\"${flac_file}\"" >> "$csv_output"
             error_count=$((error_count + 1))
             echo "Error detected in: $flac_file"
         fi
     done < <(find "$library_dir" -type f -iname "*.flac" -print0)
 
-    echo "Scan complete. Total FLAC files scanned: $total_count. Errors found: $error_count."
-    echo "CSV report generated: $csv_output"
+    # Update error count in metadata if CSV was created
+    if [ $error_count -gt 0 ]; then
+        sed -i "s/| Errors: /| Errors: $error_count/" "$csv_output"
+        echo "Scan complete. Found $error_count errors in $total_count files."
+        echo "CSV report generated: $csv_output"
+    else
+        echo "Scan complete. No errors found in $total_count files."
+        rm -f "$csv_output"  # Remove empty CSV
+    fi
 
     # Update metadata file
     local metadata_file="${library_dir}/.flac_scan_metadata"
@@ -246,7 +255,6 @@ scan_incremental() {
     # Generate CSV filename with timestamp
     local timestamp=$(date +%F_%H-%M-%S)
     local csv_output="${library_dir}/flac_scan_${timestamp}.csv"
-    echo "filepath" > "$csv_output"
 
     echo "Scanning new/changed FLAC files in: $library_dir"
     local error_count=0
@@ -257,6 +265,11 @@ scan_incremental() {
     while IFS= read -r -d '' flac_file; do
         total_count=$((total_count + 1))
         if ! flac -t "$flac_file" &>/dev/null; then
+            # Create CSV file if first error
+            if [ $error_count -eq 0 ]; then
+                echo "# Scan Metadata: $(date -u +%FT%TZ) | Files: $total_count | Errors: | Type: incremental" > "$csv_output"
+                echo "filepath" >> "$csv_output"
+            fi
             echo "\"${flac_file}\"" >> "$csv_output"
             error_count=$((error_count + 1))
             echo "Error detected in: $flac_file"
@@ -264,16 +277,21 @@ scan_incremental() {
         scanned_count=$((scanned_count + 1))
     done < <(find "$library_dir" -type f -iname "*.flac" -newermt "$last_scan" -print0)
 
+    # Update error count in metadata if CSV was created
+    if [ $error_count -gt 0 ]; then
+        sed -i "s/| Errors: /| Errors: $error_count/" "$csv_output"
+        echo "Incremental scan complete. Found $error_count errors in $scanned_count files scanned ($total_count total files)."
+        echo "CSV report generated: $csv_output"
+    else
+        echo "Incremental scan complete. No errors found in $scanned_count files scanned ($total_count total files)."
+        rm -f "$csv_output"  # Remove empty CSV
+    fi
+
     # Update metadata file
     jq -n \
         --arg full "$(date -u +%FT%TZ)" \
         --arg incremental "$(date -u +%FT%TZ)" \
         '{last_full_scan: $full, last_incremental_scan: $incremental, scan_version: "1.0"}' > "$metadata_file"
-
-    echo "Incremental scan complete."
-    echo "Files scanned: $scanned_count (out of $total_count total FLAC files)"
-    echo "Errors found: $error_count"
-    echo "CSV report generated: $csv_output"
 }
 
 # Start the script by displaying the main menu.
