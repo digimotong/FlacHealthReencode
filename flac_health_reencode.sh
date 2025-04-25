@@ -1,36 +1,29 @@
 #!/bin/bash
 # flac_health_reencode.sh
 # -------------------------------------------
-# This script provides two options:
-#  1) Scan a music library for FLAC encoding errors.
-#     - Prompts the user for the library directory.
-#     - Recursively scans all .flac files using "flac -t".
-#     - Files with encoding errors are logged into a CSV file in the library directory.
+# This script provides three main functions:
+#  1) Full library scan for FLAC encoding errors
+#     - Scans all FLAC files using "flac -t"
+#     - Only creates CSV output when errors found
+#     - Tracks scan metadata for incremental scans
 #
-#  2) Reencode files that were flagged as problematic.
-#     - Prompts for the directory containing the CSV file (typically the music library).
-#     - Finds the latest CSV report, confirms with the user,
-#       then reencodes each file using FLAC with:
-#         --verify
-#         --compression-level-0
-#         --decode-through-errors
-#         --preserve-modtime
-#         --silent
-#         -o <output>
+#  2) Reencode problematic files
+#     - Uses latest CSV report of problematic files
+#     - Creates local backups before reencoding
+#     - Preserves original file timestamps
 #
-#     - **Backup Behavior Update:** Before overwriting the original file,
-#       the script creates (if needed) a backup folder in the same directory as the file
-#       (e.g., within the album folder) and copies the original file there.
+#  3) Incremental scan for new/changed files
+#     - Only scans files modified since last scan
+#     - Uses metadata tracking for efficiency
+#     - Maintains same CSV format as full scan
 #
-# Best practices used:
-#  - Dependency checking
-#  - Robust error handling
-#  - Handling spaces in filenames safely
-#  - Inline documentation and log file generation for transparency
+# Features:
+#  - Safe backup handling (creates backup_FLAC_originals folders)
+#  - Detailed error reporting and logging
+#  - Metadata tracking (.flac_scan_metadata)
+#  - Handles filenames with spaces
 #
-# Further improvements:
-#  - Add command-line options for non-interactive/cron jobs.
-#  - Include progress indicators for large music libraries.
+# Dependencies: flac, jq
 # -------------------------------------------
 
 # Exit when a command fails, when a variable is unset, and catch errors in pipelines.
