@@ -24,10 +24,9 @@ PROGRESS_WIDTH=50
 # Features:
 #  - Safe backup handling (creates backup_FLAC_originals folders)
 #  - Detailed error reporting and logging
-#  - Basic metadata tracking (.flac_scan_metadata)
 #  - Handles filenames with spaces
 #
-# Dependencies: flac, jq
+# Dependencies: flac
 # -------------------------------------------
 
 # Exit when a command fails, when a variable is unset, and catch errors in pipelines.
@@ -36,7 +35,7 @@ set -o nounset
 set -o pipefail
 
 # Ensure required commands are available.
-for cmd in flac jq; do
+for cmd in flac; do
     if ! command -v "$cmd" &>/dev/null; then
         echo "Error: The '$cmd' command is not installed. Please install it (e.g., sudo apt-get install $cmd) and try again."
         exit 1
@@ -90,7 +89,7 @@ scan_library() {
 
     # Create scan data directory structure
     scan_data_dir="${library_dir}/.flac_scan_data"
-    mkdir -p "${scan_data_dir}/reports" "${scan_data_dir}/metadata" "${scan_data_dir}/logs"
+    mkdir -p "${scan_data_dir}/reports" "${scan_data_dir}/logs"
     
     # Generate CSV filename with timestamp
     timestamp=$(date +%F_%H-%M-%S)
@@ -119,7 +118,7 @@ scan_library() {
         if ! flac -t "$flac_file" &>/dev/null; then
             # Create CSV file if first error
             if [ $error_count -eq 0 ]; then
-                echo "# Scan Metadata: $(date -u +%FT%TZ) | Files: $total_files | Errors: | Type: full" > "$csv_output"
+                echo "# Scan Report: $(date -u +%FT%TZ) | Files: $total_files | Errors: " > "$csv_output"
                 echo "filepath" >> "$csv_output"
             fi
             # Log problematic file
@@ -151,12 +150,7 @@ scan_library() {
         rm -f "$csv_output"  # Remove empty CSV
     fi
 
-    # Update metadata file
-    local metadata_file="${library_dir}/.flac_scan_metadata"
-    jq -n \
-        --arg full "$(date -u +%FT%TZ)" \
-        '{last_scan: $full, scan_version: "1.0"}' > "$metadata_file"
-    echo "Scan metadata updated: $metadata_file"
+    echo "Scan complete. Report saved to: $csv_output"
 }
 
 ########################################
