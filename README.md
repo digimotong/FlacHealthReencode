@@ -1,8 +1,5 @@
 # FLAC Health Check & Re-encode Utility
 
-![Bash](https://img.shields.io/badge/Shell_Script-4EAA25?style=for-the-badge&logo=gnu-bash&logoColor=white)
-![FLAC](https://img.shields.io/badge/FLAC-000000?style=for-the-badge&logo=flac&logoColor=white)
-
 A robust Bash script for scanning and repairing FLAC audio files while preserving metadata and creating backups.
 
 ## Features
