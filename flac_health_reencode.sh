@@ -186,6 +186,7 @@ scan_library() {
     fi
 
     echo "Scan complete. Report saved to: $csv_output"
+    read -rp "Press Enter to return to main menu..."
 }
 
 ########################################
@@ -297,6 +298,78 @@ reencode_library() {
     echo "Successful reencodes: $success_count" | tee -a "$log_file"
     echo "Failed reencodes: $fail_count" | tee -a "$log_file"
     echo "Detailed log saved as: $log_file"
+    read -rp "Press Enter to return to main menu..."
+}
+
+########################################
+# FUNCTION: cleanup_backups
+# Finds and removes all backup_FLAC_originals folders
+########################################
+cleanup_backups() {
+    config=$(load_config)
+    library_path=$(echo "$config" | jq -r '.library_path')
+    
+    if [ -z "$library_path" ] || [ "$library_path" == "null" ]; then
+        read -rp "Enter the library path to clean backups from: " library_path
+    fi
+
+    if [ ! -d "$library_path" ]; then
+        echo "Error: Directory '$library_path' does not exist."
+        return 1
+    fi
+
+    # Find all backup folders
+    backup_folders=()
+    while IFS= read -r -d '' folder; do
+        backup_folders+=("$folder")
+    done < <(find "$library_path" -type d -name "backup_FLAC_originals" -print0)
+
+    if [ ${#backup_folders[@]} -eq 0 ]; then
+        echo "No backup folders found in '$library_path'"
+        return 0
+    fi
+
+    # Calculate total size and count
+    total_size=0
+    total_files=0
+    for folder in "${backup_folders[@]}"; do
+        size=$(du -sb "$folder" | cut -f1)
+        files=$(find "$folder" -type f | wc -l)
+        total_size=$((total_size + size))
+        total_files=$((total_files + files))
+    done
+
+    # Human readable size
+    hr_size=$(numfmt --to=iec --suffix=B $total_size)
+
+    echo "Found ${#backup_folders[@]} backup folders containing $total_files files (total $hr_size)"
+    echo "WARNING: This will PERMANENTLY delete all FLAC backups"
+    read -rp "Type 'DELETE' to confirm: " confirm
+    if [ "$confirm" != "DELETE" ]; then
+        echo "Backup cleanup cancelled."
+        return 0
+    fi
+
+    read -rp "Are you ABSOLUTELY SURE? (y/N): " confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        echo "Backup cleanup cancelled."
+        return 0
+    fi
+
+    # Actually delete
+    deleted_count=0
+    deleted_size=0
+    for folder in "${backup_folders[@]}"; do
+        echo "Deleting: $folder"
+        rm -rf "$folder"
+        deleted_count=$((deleted_count + 1))
+        size=$(du -sb "$folder" 2>/dev/null | cut -f1 || echo 0)
+        deleted_size=$((deleted_size + size))
+    done
+
+    hr_deleted_size=$(numfmt --to=iec --suffix=B $deleted_size)
+    echo "Deleted $deleted_count backup folders ($hr_deleted_size)"
+    read -rp "Press Enter to return to main menu..."
 }
 
 ########################################
@@ -320,6 +393,7 @@ set_library_path() {
     else
         echo "Library path remains unchanged."
     fi
+    read -rp "Press Enter to return to main menu..."
 }
 
 ########################################
@@ -333,19 +407,23 @@ main_menu() {
     echo "1) Full scan music library"
     echo "2) Reencode problematic FLAC files (with local backups)"
     echo "3) Set/Update default library path"
-    echo "4) Quit"
+    echo "4) Clean up FLAC backups"
+    echo "5) Quit"
     echo "======================================"
-    read -rp "Enter your selection (1-4): " selection
+    read -rp "Enter your selection (1-5): " selection
 
     case "$selection" in
         1) scan_library ;;
         2) reencode_library ;;
         3) set_library_path ;;
-        4) echo "Exiting..."; exit 0 ;;
+        4) cleanup_backups ;;
+        5) echo "Exiting..."; exit 0 ;;
         *) echo "Invalid selection. Exiting." ; exit 1 ;;
     esac
 }
 
 
-# Start the script by displaying the main menu.
-main_menu
+# Start the script by displaying the main menu in a loop
+while true; do
+    main_menu
+done
