@@ -1,6 +1,9 @@
 #!/bin/bash
 # flac_health_reencode.sh
 
+# Configuration file path
+CONFIG_FILE="$(dirname "$(realpath "$0")")/flac_health_config.json"
+
 # Terminal colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -33,6 +36,30 @@ PROGRESS_WIDTH=50
 set -o errexit
 set -o nounset
 set -o pipefail
+
+########################################
+# FUNCTION: load_config
+# Loads configuration from file or creates default
+########################################
+load_config() {
+    if [ ! -f "$CONFIG_FILE" ]; then
+        jq -n '{library_path: "", version: "1.0"}' > "$CONFIG_FILE"
+    fi
+    config=$(cat "$CONFIG_FILE")
+    echo "$config"
+}
+
+########################################
+# FUNCTION: save_config
+# Saves configuration to file
+# Arguments:
+#   $1 - New library path
+########################################
+save_config() {
+    local new_path="$1"
+    config=$(jq --arg path "$new_path" '.library_path = $path' "$CONFIG_FILE")
+    echo "$config" > "$CONFIG_FILE"
+}
 
 # Ensure required commands are available.
 for cmd in flac; do
@@ -79,8 +106,16 @@ show_progress() {
 # Any file that fails the test is recorded (with quotes) in a CSV file stored in the library directory.
 ########################################
 scan_library() {
-    read -rp "Enter the full path to your music library directory: " library_dir
+    config=$(load_config)
+    library_path=$(echo "$config" | jq -r '.library_path')
+    
+    if [ -z "$library_path" ] || [ "$library_path" == "null" ]; then
+        read -rp "Enter the full path to your music library directory: " library_path
+        save_config "$library_path"
+    fi
 
+    library_dir="$library_path"
+    
     # Validate the directory.
     if [ ! -d "$library_dir" ]; then
         echo "Error: The directory '$library_dir' does not exist."
@@ -163,16 +198,24 @@ scan_library() {
 #   and the original file is backed up there before it is replaced by the reencoded version.
 ########################################
 reencode_library() {
-    # Ask for the directory containing your FLAC scan CSV files.
-    read -rp "Enter the directory containing your FLAC scan CSV files (typically your music library): " library_dir
+    config=$(load_config)
+    library_path=$(echo "$config" | jq -r '.library_path')
+    
+    if [ -z "$library_path" ] || [ "$library_path" == "null" ]; then
+        read -rp "Enter the directory containing your FLAC scan CSV files (typically your music library): " library_path
+        save_config "$library_path"
+    fi
 
+    library_dir="$library_path"
+    
     if [ ! -d "$library_dir" ]; then
         echo "Error: The directory '$library_dir' does not exist."
         exit 1
     fi
 
-    # Locate the latest CSV file (by modification time).
-    latest_csv=$(find "$library_dir" -maxdepth 1 -type f -iname "flac_scan_*.csv" -printf "%T@ %p\n" \
+    # Locate the latest CSV file in reports directory (by modification time).
+    scan_data_dir="${library_dir}/.flac_scan_data/reports"
+    latest_csv=$(find "$scan_data_dir" -type f -iname "flac_scan_*.csv" -printf "%T@ %p\n" \
                  | sort -n \
                  | tail -1 \
                  | cut -d' ' -f2-)
@@ -257,6 +300,29 @@ reencode_library() {
 }
 
 ########################################
+# FUNCTION: set_library_path
+# Allows user to set or update the default library path
+########################################
+set_library_path() {
+    config=$(load_config)
+    current_path=$(echo "$config" | jq -r '.library_path')
+    
+    if [ -z "$current_path" ] || [ "$current_path" == "null" ]; then
+        echo "No library path is currently configured."
+    else
+        echo "Current library path: $current_path"
+    fi
+    
+    read -rp "Enter new library path (leave blank to keep current): " new_path
+    if [ -n "$new_path" ]; then
+        save_config "$new_path"
+        echo "Library path updated to: $new_path"
+    else
+        echo "Library path remains unchanged."
+    fi
+}
+
+########################################
 # MAIN MENU
 # Displays a simple menu to select either scanning or reencoding.
 ########################################
@@ -266,14 +332,16 @@ main_menu() {
     echo "======================================"
     echo "1) Full scan music library"
     echo "2) Reencode problematic FLAC files (with local backups)"
-    echo "3) Quit"
+    echo "3) Set/Update default library path"
+    echo "4) Quit"
     echo "======================================"
-    read -rp "Enter your selection (1 or 2): " selection
+    read -rp "Enter your selection (1-4): " selection
 
     case "$selection" in
         1) scan_library ;;
         2) reencode_library ;;
-        3) echo "Exiting..."; exit 0 ;;
+        3) set_library_path ;;
+        4) echo "Exiting..."; exit 0 ;;
         *) echo "Invalid selection. Exiting." ; exit 1 ;;
     esac
 }
