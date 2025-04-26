@@ -1,4 +1,43 @@
 #!/bin/bash
+###############################################################################
+# FLAC Health Check & Re-encode Utility
+#
+# Purpose:
+#   - Scans FLAC files for corruption/errors
+#   - Safely re-encodes problematic files while preserving originals
+#   - Maintains detailed scan reports and operation logs
+#
+# Features:
+#   - Recursive directory scanning
+#   - Progress tracking with visual feedback
+#   - Configurable library paths (stored in JSON)
+#   - Automatic backup of original files before re-encoding
+#   - Comprehensive error logging
+#
+# Requirements:
+#   - bash 4.0+
+#   - flac command line tool
+#   - jq for JSON processing
+#
+# Usage:
+#   1. Run script: ./flac_health_reencode.sh
+#   2. Select operation from menu:
+#      - Scan library for errors
+#      - Re-encode problematic files
+#      - Manage library path
+#      - Clean up backups
+#
+# Important Notes:
+#   - Backups are stored in 'backup_FLAC_originals' subdirectories
+#   - Scan reports are saved in '.flac_scan_data/reports'
+#   - Operation logs are saved in '.flac_scan_data/logs'
+#   - Uses FLAC's --decode-through-errors for maximum recovery
+#
+# Version: 1.0
+# Author: [Your Name/Organization]
+# Last Updated: $(date +%F)
+###############################################################################
+
 # flac_health_reencode.sh
 
 # Configuration file path
@@ -12,25 +51,6 @@ NC='\033[0m' # No Color
 
 # Progress tracking
 PROGRESS_WIDTH=50
-# -------------------------------------------
-# This script provides two main functions:
-#  1) Full library scan for FLAC encoding errors
-#     - Scans all FLAC files using "flac -t"
-#     - Only creates CSV output when errors found
-#     - Tracks basic scan metadata
-#
-#  2) Reencode problematic files
-#     - Uses latest CSV report of problematic files
-#     - Creates local backups before reencoding
-#     - Preserves original file timestamps
-#
-# Features:
-#  - Safe backup handling (creates backup_FLAC_originals folders)
-#  - Detailed error reporting and logging
-#  - Handles filenames with spaces
-#
-# Dependencies: flac
-# -------------------------------------------
 
 # Exit when a command fails, when a variable is unset, and catch errors in pipelines.
 set -o errexit

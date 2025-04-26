@@ -1,69 +1,81 @@
-# FLAC Health Check & Reencode Script
+# FLAC Health Check & Re-encode Utility
 
-A bash script for scanning and repairing FLAC audio files with encoding errors.
+![Bash](https://img.shields.io/badge/Shell_Script-4EAA25?style=for-the-badge&logo=gnu-bash&logoColor=white)
+![FLAC](https://img.shields.io/badge/FLAC-000000?style=for-the-badge&logo=flac&logoColor=white)
+
+A robust Bash script for scanning and repairing FLAC audio files while preserving metadata and creating backups.
 
 ## Features
 
-- **Full Library Scan**: Checks all FLAC files in a directory for encoding errors
-- **Incremental Scan**: Only checks files modified since last scan
-- **Smart Reporting**: 
-  - Only creates CSV reports when errors found
-  - Includes metadata about each scan
-  - Tracks scan history in `.flac_scan_metadata`
-- **Safe Reencoding**:
-  - Creates local backups before modifying files
-  - Preserves original timestamps
-  - Generates detailed logs
+- ✅ Recursive scanning of FLAC files for corruption
+- 🔄 Safe re-encoding of problematic files with backup preservation
+- 📊 Detailed CSV reports and operation logs
+- 🎨 Color-coded terminal output with progress tracking
+- ⚙️ Persistent configuration via JSON file
+- 🗑️ Backup cleanup utility
 
-## Usage
+## Installation
 
-1. Clone this repository
-2. Make the script executable:
+1. Ensure you have the required dependencies:
+   ```bash
+   sudo apt-get install flac jq  # Debian/Ubuntu
+   brew install flac jq         # macOS
+   ```
+
+2. Download the script:
+   ```bash
+   git clone https://github.com/yourusername/flac-health-reencode.git
+   cd flac-health-reencode/scripts/FlacHealthReencode
+   ```
+
+3. Make the script executable:
    ```bash
    chmod +x flac_health_reencode.sh
    ```
-3. Run the script:
-   ```bash
-   ./flac_health_reencode.sh
-   ```
 
-### Menu Options
+## Usage
 
-1. **Full scan music library**  
-   Scans all FLAC files in the specified directory
-
-2. **Reencode problematic FLAC files**  
-   Uses the latest CSV report to reencode files with errors
-
-3. **Scan new/changed files only**  
-   Only scans files modified since last scan (faster)
-
-4. **Quit**  
-   Exits the script
-
-## Output Files
-
-- `flac_scan_YYYY-MM-DD_HH-MM-SS.csv` - Error reports (only created when errors found)
-- `.flac_scan_metadata` - JSON file tracking scan history
-- `reencode_log_YYYY-MM-DD_HH-MM-SS.txt` - Reencoding operation logs
-
-## Requirements
-
-- `flac` - For testing and reencoding files
-- `jq` - For metadata file handling
-
-Install on Debian/Ubuntu:
+Run the script and follow the interactive menu:
 ```bash
-sudo apt-get install flac jq
+./flac_health_reencode.sh
 ```
 
-## Backup Behavior
+### Menu Options:
+1. **Full scan music library** - Checks all FLAC files for errors
+2. **Reencode problematic FLAC files** - Fixes corrupted files (creates backups)
+3. **Set/Update default library path** - Configure your music library location
+4. **Clean up FLAC backups** - Remove backup files after verification
+5. **Quit**
 
-Before reencoding any file, the script:
-1. Creates a `backup_FLAC_originals` folder in the file's directory
-2. Copies the original file there
-3. Only then attempts to reencode the file
+## Configuration
+
+The script automatically creates a configuration file (`flac_health_config.json`) in its directory. You can:
+- Set the default library path through the menu
+- Manually edit the JSON file:
+  ```json
+  {
+    "library_path": "/path/to/your/music",
+    "version": "1.0"
+  }
+  ```
+
+## File Structure
+
+The script creates the following structure in your music library:
+```
+.music_library/
+└── .flac_scan_data/
+    ├── reports/         # CSV scan reports
+    └── logs/            # Operation logs
+```
+
+For each re-encoded file, a backup is stored in:
+```
+album_folder/
+└── backup_FLAC_originals/
+    └── original_file.flac
+```
 
 ## License
 
-MIT License - Free to use and modify
+MIT License - See [LICENSE](LICENSE) file (create one if needed)
