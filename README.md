@@ -75,7 +75,3 @@ album_folder/
 └── backup_FLAC_originals/
     └── original_file.flac
 ```
-
-## License
-
-MIT License - See [LICENSE](LICENSE) file (create one if needed)
