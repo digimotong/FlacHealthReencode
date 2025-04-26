@@ -10,26 +10,21 @@ NC='\033[0m' # No Color
 # Progress tracking
 PROGRESS_WIDTH=50
 # -------------------------------------------
-# This script provides three main functions:
+# This script provides two main functions:
 #  1) Full library scan for FLAC encoding errors
 #     - Scans all FLAC files using "flac -t"
 #     - Only creates CSV output when errors found
-#     - Tracks scan metadata for incremental scans
+#     - Tracks basic scan metadata
 #
 #  2) Reencode problematic files
 #     - Uses latest CSV report of problematic files
 #     - Creates local backups before reencoding
 #     - Preserves original file timestamps
 #
-#  3) Incremental scan for new/changed files
-#     - Only scans files modified since last scan
-#     - Uses metadata tracking for efficiency
-#     - Maintains same CSV format as full scan
-#
 # Features:
 #  - Safe backup handling (creates backup_FLAC_originals folders)
 #  - Detailed error reporting and logging
-#  - Metadata tracking (.flac_scan_metadata)
+#  - Basic metadata tracking (.flac_scan_metadata)
 #  - Handles filenames with spaces
 #
 # Dependencies: flac, jq
@@ -160,8 +155,7 @@ scan_library() {
     local metadata_file="${library_dir}/.flac_scan_metadata"
     jq -n \
         --arg full "$(date -u +%FT%TZ)" \
-        --arg incremental "$(date -u +%FT%TZ)" \
-        '{last_full_scan: $full, last_incremental_scan: $incremental, scan_version: "1.0"}' > "$metadata_file"
+        '{last_scan: $full, scan_version: "1.0"}' > "$metadata_file"
     echo "Scan metadata updated: $metadata_file"
 }
 
@@ -278,92 +272,18 @@ main_menu() {
     echo "======================================"
     echo "1) Full scan music library"
     echo "2) Reencode problematic FLAC files (with local backups)"
-    echo "3) Scan new/changed files only"
-    echo "4) Quit"
+    echo "3) Quit"
     echo "======================================"
-    read -rp "Enter your selection (1, 2, or 3): " selection
+    read -rp "Enter your selection (1 or 2): " selection
 
     case "$selection" in
         1) scan_library ;;
         2) reencode_library ;;
-        3) scan_incremental ;;
-        4) echo "Exiting..."; exit 0 ;;
+        3) echo "Exiting..."; exit 0 ;;
         *) echo "Invalid selection. Exiting." ; exit 1 ;;
     esac
 }
 
-########################################
-# FUNCTION: scan_incremental
-# Scans only FLAC files that have been modified since the last scan,
-# or files that have never been scanned before.
-########################################
-scan_incremental() {
-    read -rp "Enter the full path to your music library directory: " library_dir
-
-    # Validate the directory
-    if [ ! -d "$library_dir" ]; then
-        echo "Error: The directory '$library_dir' does not exist."
-        exit 1
-    fi
-
-    # Check for existing metadata file
-    local scan_data_dir="${library_dir}/.flac_scan_data"
-    mkdir -p "${scan_data_dir}/metadata"
-    local metadata_file="${scan_data_dir}/metadata/scan_history.json"
-    local last_scan="1970-01-01T00:00:00Z"  # Default to epoch if no metadata
-    
-    if [ -f "$metadata_file" ]; then
-        last_scan=$(jq -r '.last_full_scan // "1970-01-01T00:00:00Z"' "$metadata_file")
-        echo "Found previous scan from: $last_scan"
-    else
-        echo "No previous scan found - will scan all files"
-    fi
-
-    # Create scan data directory structure
-    local scan_data_dir="${library_dir}/.flac_scan_data"
-    mkdir -p "${scan_data_dir}/reports" "${scan_data_dir}/metadata" "${scan_data_dir}/logs"
-    
-    # Generate CSV filename with timestamp
-    local timestamp=$(date +%F_%H-%M-%S)
-    local csv_output="${scan_data_dir}/reports/flac_scan_${timestamp}.csv"
-
-    echo "Scanning new/changed FLAC files in: $library_dir"
-    local error_count=0
-    local total_count=0
-    local scanned_count=0
-
-    # Find and scan files modified since last scan
-    while IFS= read -r -d '' flac_file; do
-        total_count=$((total_count + 1))
-        if ! flac -t "$flac_file" &>/dev/null; then
-            # Create CSV file if first error
-            if [ $error_count -eq 0 ]; then
-                echo "# Scan Metadata: $(date -u +%FT%TZ) | Files: $total_count | Errors: | Type: incremental" > "$csv_output"
-                echo "filepath" >> "$csv_output"
-            fi
-            echo "\"${flac_file}\"" >> "$csv_output"
-            error_count=$((error_count + 1))
-            echo "Error detected in: $flac_file"
-        fi
-        scanned_count=$((scanned_count + 1))
-    done < <(find "$library_dir" -type f -iname "*.flac" -newermt "$last_scan" -print0)
-
-    # Update error count in metadata if CSV was created
-    if [ $error_count -gt 0 ]; then
-        sed -i "s/| Errors: /| Errors: $error_count/" "$csv_output"
-        echo "Incremental scan complete. Found $error_count errors in $scanned_count files scanned ($total_count total files)."
-        echo "CSV report generated: $csv_output"
-    else
-        echo "Incremental scan complete. No errors found in $scanned_count files scanned ($total_count total files)."
-        rm -f "$csv_output"  # Remove empty CSV
-    fi
-
-    # Update metadata file
-    jq -n \
-        --arg full "$(date -u +%FT%TZ)" \
-        --arg incremental "$(date -u +%FT%TZ)" \
-        '{last_full_scan: $full, last_incremental_scan: $incremental, scan_version: "1.0"}' > "$metadata_file"
-}
 
 # Start the script by displaying the main menu.
 main_menu
