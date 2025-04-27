@@ -21,8 +21,8 @@ A robust Bash script for scanning and repairing FLAC audio files while preservin
 
 2. Download the script:
    ```bash
-   git clone https://github.com/digimotong/FlacHealthReencode.git
-   cd FlacHealthReencode
+   git clone https://github.com/digimotong/flac-health-reencode.git
+   cd flac-health-reencode
    ```
 
 3. Make the script executable:
